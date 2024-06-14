@@ -79,9 +79,10 @@ function get_item(id) {
     return null;
 }
 
-function get_item_in_cart(id) {
+function get_item_in_cart(id, modifier_id) {
+    let withoutModifier = isNaN(parseInt(modifier_id))
     for (let cartItem of cartData) {
-        if (cartItem.item_id === parseInt(id)) {
+        if (cartItem.item_id === parseInt(id) && (withoutModifier || cartItem.modifier_id === parseInt(modifier_id))) {
             return cartItem;
         }
     }
@@ -126,12 +127,12 @@ function gen_html_cart() {
 function get_or_reload_cart(
     btnSpace = null,
     return_full_obj = false,
-    id_product = null,
-    id_product_modifier = null,
+    product_id = null,
+    product_modifier_id = undefined,
     update_main_button = true,
     main_button_prefix = 'Корзина ',
 ) {
-    id_product = parseInt(id_product);
+    let id_product = parseInt(product_id);
     $.ajax({
         url: `${API_HOST}/api/v1/external/cart`,
         method: 'get',
@@ -142,22 +143,26 @@ function get_or_reload_cart(
             if (btnSpace) {
                 let html = '';
                 for (let item_data of data.cart_items) {
-                    if (item_data.item_id === id_product && item_data.modifier_id === id_product_modifier) {
+                    if (item_data.item_id === id_product && item_data.modifier_id === product_modifier_id) {
                         cart_item_info = item_data;
                         if (item_data.count > 0) {
                             html = `
-                                <div data-cart="${data.cart_id}" data-cart-item="${item_data.cart_item_id}"  data-product="${id_product}"  data-product-modifier="${id_product_modifier}" class="groupBtn">
-                                    <button class="listControl" data-action="minus">-</button>
-                                    <input type="text" readonly="" value="${item_data.count}">
-                                    <button class="listControl" data-action="plus">+</button>
+                                <div data-cart="${data.cart_id}" data-cart-item="${item_data.cart_item_id}"  data-product="${id_product}"  data-product-modifier="${product_modifier_id}" class="groupBtn">
+                                    ${(item_data.modifiers === undefined || item_data.modifiers === null || item_data.modifiers.length <= 0)
+                                        ? `<button class="listControl" data-action="minus">-</button>
+                                           <input type="text" readonly="" value="${item_data.count}">
+                                           <button class="listControl" data-action="plus">+</button>`
+                                        : `<input type="text" readonly="" value="${item_data.count}">`
+                                    }
                                 </div>
                             `;
                         }
 
                         if (item_data.count <= 0) {
-                            html = `
-                                <button data-id="${item_data.id}" class="listAddToCart">${item_data.item_cost} ${defaultCurrency}</button>
-                            `;
+                            html += `${(item.modifiers === null || item.modifiers.length <=0)
+                                ? `<button data-id="${item.id}" class="listAddToCart">${item.item_cost} ${defaultCurrency}</button>`
+                                : `<button data-ajax='{"route":"iProduct","id":${item.id}}' class="ajaxLink">${item.item_cost} ${defaultCurrency}</button>`
+                            }`
                         }
                     }
                 }
@@ -273,21 +278,24 @@ const Application = {
                                     <div class="btnEnable">
                                         <div class="btn-space position-absolute bottom-0">
                                         `
-                                        if (item.count_in_cart > 0 && (item.modifiers === null || item.modifiers.length <=0)) {
+                                        if (item.count_in_cart > 0) {
                                             html+= `
                                                 <div data-cart="${cartDataObj.cart_id}" data-cart-item="${item.cart_item_id}" data-product="${item.id}"  data-product-modifier="${item.modifier_id}" class="groupBtn">
-                                                    <button class="listControl" data-action="minus">-</button>
-                                                    <input type="text" readonly="" value="${item.count_in_cart}">
-                                                    <button class="listControl" data-action="plus">+</button>
+                                                    ${(item.modifiers === null || item.modifiers.length <=0)
+                                                        ? `<button class="listControl" data-action="minus">-</button>
+                                                           <input type="text" readonly="" value="${item.count_in_cart}">
+                                                           <button class="listControl" data-action="plus">+</button>`
+                                                        : `<input type="text" readonly="" value="${item.count_in_cart}">`
+                                                    }
                                                 </div>
                                             `;
                                         }
 
                                         if (item.count_in_cart === undefined || item.count_in_cart <= 0) {
-                                            html += `
-                                                <button data-id="${item.id}" class="listAddToCart">${item.item_cost} ${defaultCurrency}</button>
-                                            `;
-
+                                            html += `${(item.modifiers === null || item.modifiers.length <=0)
+                                                ? `<button data-id="${item.id}" class="listAddToCart">${item.item_cost} ${defaultCurrency}</button>`
+                                                : `<button data-ajax='{"route":"iProduct","id":${item.id}}' class="ajaxLink">${item.item_cost} ${defaultCurrency}</button>`
+                                            }`
                                         }
                                         html += `
                                                         </div>
@@ -367,8 +375,8 @@ const Application = {
             }
         }
 
-        function addToCartICatalog(id_product, id_product_modifier, btnSpace) {
-            get_or_reload_cart(btnSpace, false, id_product);
+        function addToCartICatalog(product_id, product_modifier_id, btnSpace) {
+            get_or_reload_cart(btnSpace, false, product_id, product_modifier_id);
 
             $.ajax({
                 url: `${API_HOST}/api/v1/external/cart/cart_item`,
@@ -377,12 +385,12 @@ const Application = {
                 dataType: 'json',
                 headers: headersData,
                 data: JSON.stringify({
-                    'item_id': id_product,
-                    'item_modifier_id': id_product_modifier,
+                    'item_id': product_id,
+                    'item_modifier_id': product_modifier_id,
                     'count': 1,
                 }),
                 success: function(data) {
-                    get_or_reload_cart(btnSpace, false, id_product);
+                    get_or_reload_cart(btnSpace, false, product_id, product_modifier_id);
                 },
                 error: function() {
                     console.log('error addToCartICatalog');
@@ -390,7 +398,7 @@ const Application = {
             });
         }
 
-        function editCartICatalog(id_cart_item, product_id,  product_modifier_id, quantity, btnSpace) {
+        function editCartICatalog(id_cart_item, product_id, product_modifier_id, quantity, btnSpace) {
             let data = {
                 count: quantity,
             };
@@ -415,12 +423,12 @@ const Application = {
             e.stopImmediatePropagation();
             tg.HapticFeedback.selectionChanged(function() {});
             let card = $(this).parents('.cardProduct');
-            let id_product = $(this).attr('data-id');
-            let id_product_modifier = $(this).attr('data-modifier-id');
+            let product_id = $(this).attr('data-id');
+            let product_modifier_id = $(this).attr('data-modifier-id');
             let btnSpace = $(this).parents('.btn-space');
             card.addClass('incart');
 
-            addToCartICatalog(id_product, id_product_modifier, btnSpace);
+            addToCartICatalog(product_id, product_modifier_id, btnSpace);
         });
 
         $('body').on('click', '.groupBtn .listControl', function(e) {
@@ -432,23 +440,24 @@ const Application = {
             let btnSpace = btn.parents('.btn-space');
             let id_cart_item = btn.parents('.groupBtn').attr('data-cart-item');
             let product_id = btn.parents('.groupBtn').attr('data-product');
-            let product__modifier_id = btn.parents('.groupBtn').attr('data-product-modifier');
+            let product_modifier_id = btn.parents('.groupBtn').attr('data-product-modifier');
+            product_modifier_id = product_modifier_id === 'undefined' ? undefined : product_modifier_id
             var value = btn.parents('.groupBtn').find('input').val();
 
-            if (action == 'plus') {
+            if (action === 'plus') {
                 value = Number(value) + 1;
             } else {
                 if (Number(value) > 0) {
                     value = Number(value) - 1;
                 }
             }
-            if (value == 0) {
+            if (value === 0) {
                 card.removeClass('incart');
             } else {
                 btn.parents('.groupBtn').find('input').val(value);
             }
 
-            editCartICatalog(id_cart_item, product_id, product__modifier_id ,value, btnSpace);
+            editCartICatalog(id_cart_item, product_id, product_modifier_id ,value, btnSpace);
         });
 
         //for getICatalogNav()
@@ -472,9 +481,10 @@ const Application = {
     },
 
 
-    getIProuct(id) {
+    getIProduct(id) {
         tg.BackButton.show();
         tg.MainButton.hide(function() {});
+
         let dataAjax = {
             'route': 'iCatalog',
         }
@@ -489,45 +499,41 @@ const Application = {
             chat_id: chat_id,
         };
         catalog_item = get_item(id);
+        let withoutModifiers = catalog_item.modifiers === null || catalog_item.modifiers.length <= 0
         let html = '';
 
+        function gen_html_variables(id) {
+            catalog_item = get_item(id);
+            let html = ``;
+            if (withoutModifiers) {
+                return html;
+            }
 
-    function gen_html_variables(id) {
-
-        catalog_item = get_item(id);
-        let html = ``;
-
-
-        if (catalog_item.modifiers === null || catalog_item.modifiers.length <= 0) {
-            return html;
-        }
-
-        html += `
-        <h4 class="variable_title">Дополнительно</h4>
-        <div class="variable" id="attr">
-            <div class="variable" id="attr">
-                <div class="form_radio_btn">
-            
-        `;
-    
-        catalog_item.modifiers.forEach((modifier, index) => {
             html += `
-                <input data-price="${modifier.cost}" id-product-modifier="${modifier.id}" type="checkbox" name="checkbox" data-value="${modifier.name}" value="${modifier.id}">
-                <label for="${modifier.id}">${modifier.name} 
-                    <span>+${modifier.cost} ₽</span>
-                </label>
+                <h4 class="variable_title">Дополнительно</h4>
+                <div class="variable" id="attr">
+                    <div class="variable" id="attr">
+                        <div class="form_radio_btn">
             `;
-        });
-        
-        html += `</div></div></div>`;
-        return html
-        }   
+
+            catalog_item.modifiers.forEach((modifier, index) => {
+                html += `
+                    <input data-price="${modifier.cost}" id-product-modifier="${modifier.id}" type="radio" name="radio" data-value="${modifier.name}" value="${modifier.id}">
+                    <label class="${ index === 0 ? 'first-child' : ''}" for="${modifier.id}">${modifier.name}
+                        ${modifier.cost <= 0 ? `<span>бесплатно</span>` : `<span>+${modifier.cost} ₽</span>`}
+                    </label>
+                `;
+            });
+
+            html += `</div></div></div>`;
+            return html
+        }
 
         html += `
             <div data-id="${catalog_item.id}" data-price ="${catalog_item.item_cost}" data-currency="${defaultCurrency}" class="product">
                 <picture>
                     <div class="labels-product"></div>
-                    <img src="${catalog_item.photo_url}" />
+                    <img src="${catalog_item.photo_url}" alt=""/>
                 </picture>
                 <h3>${catalog_item.name}</h3>
                 ${catalog_item.description ?
@@ -560,7 +566,7 @@ const Application = {
                                 </div>
                             </div>
                             <div class="col-6">
-                                <button data-price="${catalog_item.item_cost}" id="addToCart" class="btn btn-outline-secondary" type="button">Добавить ${catalog_item.item_cost} ${defaultCurrency}</button>
+                                <button ${withoutModifiers ? `` : `disabled="disabled"`} data-price="${catalog_item.item_cost}" id="addToCart" class="btn btn-outline-secondary" type="button">Добавить ${catalog_item.item_cost} ${defaultCurrency}</button>
                             </div>
                         </div>
                     </div>
@@ -607,23 +613,28 @@ const Application = {
                 };
             }
 
-            let attr = [];
+
+            let attr = {};
             if ($('#attr').length) {
-                $('#attr input:checkbox:checked').each(function() {
-                    attr.push({
+                $('#attr input:radio:checked').each(function() {
+                    attr = {
                         'id': $(this).val(),
-                        'name': $(this).attr('data-value'),
-                    });
+                        'name': $(this).attr('data-value')
+                    };
                 });
+            }
+            if(!withoutModifiers && attr === {}) {
+                return;
             }
 
             let data = {
                 item_id: id,
                 count: quantity,
+                item_modifier_id: attr['id'],
             };
 
             get_or_reload_cart();
-            let cartItem = get_item_in_cart(id);
+            let cartItem = get_item_in_cart(id, data.item_modifier_id);
             if (cartItem) {
                 data.count = parseInt(data.count)+parseInt(cartItem.count);
                 $.ajax({
@@ -674,12 +685,17 @@ const Application = {
                 $('.variable_description').html(description);
             }
 
-            price_attr = 0;
+            let price_attr = 0;
             if ($('#attr').length) {
-                $('#attr input:checkbox:checked').each(function() {
+                let checkedValues = $('#attr input:radio:checked');
+                checkedValues.each(function() {
                     price_attr = Number(price_attr) + Number($(this).attr('data-price'));
                 });
-
+                if (checkedValues.length) {
+                    $('#addToCart').removeAttr("disabled")
+                } else {
+                    $('#addToCart').attr("disabled", "disabled");
+                }
             }
             let dataPrice = $('.product').attr('data-price');
             let currency = $('.product').attr('data-currency');
@@ -699,6 +715,13 @@ const Application = {
             }, 200);
             addIProduct();
         })
+
+        $('body').on('click', '.form_radio_btn label', function(e) {
+            e.stopImmediatePropagation();
+            let label = $(this);
+            tg.HapticFeedback.selectionChanged(function() {});
+            label.parents('.form_radio_btn').find(`input[value="${label.attr('for')}"]`).click();
+        });
 
         $('body').on('click', '.quantity .input-group button', function(e) {
             e.stopImmediatePropagation();
@@ -764,7 +787,7 @@ const Application = {
     getICart() {
         tg.BackButton.show();
         tg.MainButton.hide();
-        if (filiationData.stopped == true) {
+        if (filiationData.stopped === true) {
             tg.showPopup({message:"Сейчас не работаем"});
             Application.getICatalog();
             return;
@@ -836,7 +859,7 @@ const Application = {
                     if (parseInt(cartData.amount) <= 0) {
                         app.html('<div class="alert-icon"><svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M27.2157 0.291034C21.0326 1.59672 16.3098 7.4918 15.8852 14.4338L15.7849 16.0741L13.1116 16.1276C10.6232 16.1775 10.3762 16.2104 9.53896 16.6038C8.40448 17.1368 7.52794 18.0092 7.02832 19.1026C6.54754 20.1549 6.58071 19.7454 5.58791 36.8682C4.82054 50.1031 4.81329 50.3151 5.08314 51.6285C5.91332 55.6696 9.07912 58.898 13.0352 59.7376C14.6868 60.0883 45.3148 60.087 46.9879 59.7363C50.8988 58.9164 54.0917 55.6572 54.9162 51.643C55.1814 50.3525 55.1725 50.0768 54.4944 38.4152C53.3858 19.352 53.4473 20.1381 52.9851 19.1266C52.475 18.0105 51.6053 17.1402 50.4635 16.6038C49.6262 16.2104 49.3792 16.1775 46.8908 16.1276L44.2175 16.0741L44.1172 14.4338C43.5474 5.1158 35.6522 -1.49069 27.2157 0.291034ZM32.1749 2.79125C32.7948 2.92095 33.9886 3.3665 34.828 3.78172C37.3979 5.05272 39.6079 7.57988 40.7012 10.4976C41.1749 11.7616 41.594 13.9854 41.594 15.2344V16.1005H30.0012H18.4084V15.2344C18.4084 11.707 20.0509 7.92719 22.619 5.54522C25.2363 3.11743 28.8092 2.08776 32.1749 2.79125ZM15.8322 20.5439C15.8322 22.3063 15.8535 22.4278 16.2275 22.8023C16.4766 23.0521 16.8067 23.1984 17.1203 23.1984C17.434 23.1984 17.7641 23.0521 18.0131 22.8023C18.3872 22.4278 18.4084 22.3063 18.4084 20.5439V18.6816H30.0012H41.594V20.5439C41.594 22.3063 41.6153 22.4278 41.9893 22.8023C42.2384 23.0521 42.5684 23.1984 42.8821 23.1984C43.1957 23.1984 43.5258 23.0521 43.7749 22.8023C44.1493 22.4275 44.1702 22.3071 44.1702 20.533V18.6593L46.7193 18.7108C49.2118 18.7611 49.2812 18.7721 49.8445 19.2031C50.1913 19.4683 50.52 19.9182 50.6699 20.3323C50.8584 20.8537 51.1231 24.5547 51.761 35.5888C52.4985 48.3432 52.5779 50.2799 52.3998 51.1444C51.8081 54.0145 49.5259 56.402 46.6591 57.1501C45.2348 57.5218 14.7676 57.5218 13.3433 57.1501C11.2111 56.5938 9.16606 54.9451 8.23896 53.0356C7.31604 51.1344 7.31589 51.5966 8.24138 35.5888C9.10697 20.6165 9.16284 20.0531 9.8407 19.4385C10.5685 18.7785 11.023 18.6835 13.4573 18.6825L15.8322 18.6816V20.5439Z" fill=""/></svg><span>Ваша корзина пуста</span></div>');
                     } else {
-                        let cartItem = get_item_in_cart(data.item_id);
+                        let cartItem = get_item_in_cart(data.item_id, data.item_modifier_id);
                         card.find('.price span').html(cartItem.full_cost);
                     }
                 },
@@ -1695,14 +1718,14 @@ const Application = {
 
         case 'iProduct':
             app.html('');
-            Application.getIProuct(data.id);
+            Application.getIProduct(data.id);
             break;
 
         case 'iCart':
             app.html('');
             console.log(data);
             try {
-                if (data.action == 'repeat') {
+                if (data.action === 'repeat') {
                     Application.repeatOrder(data.id);
                 }
             } catch (e) {}
@@ -1838,7 +1861,7 @@ tg.MainButton.onClick(function() {
     let data = JSON.parse(app.attr('data-btn'));
     tg.HapticFeedback.impactOccurred('soft');
 
-    if (data.route == 'call') {
+    if (data.route === 'call') {
         let number = $('#number').attr('data-number');
         window.open('tel:' + number, '_blank', 'location=yes,height=570,width=520,scrollbars=yes,status=yes')
     }
