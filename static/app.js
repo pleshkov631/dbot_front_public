@@ -80,9 +80,9 @@ function get_item(id) {
 }
 
 function get_item_in_cart(id, modifier_id) {
-    let withoutModifier = isNaN(parseInt(modifier_id))
+    let isWithoutModifier = isNaN(parseInt(modifier_id))
     for (let cartItem of cartData) {
-        if (cartItem.item_id === parseInt(id) && (withoutModifier || cartItem.modifier_id === parseInt(modifier_id))) {
+        if (cartItem.item_id === parseInt(id) && (isWithoutModifier || cartItem.modifier_id === parseInt(modifier_id))) {
             return cartItem;
         }
     }
@@ -499,13 +499,13 @@ const Application = {
             chat_id: chat_id,
         };
         catalog_item = get_item(id);
-        let withoutModifiers = catalog_item.modifiers === null || catalog_item.modifiers.length <= 0
+        let isWithoutModifier = catalog_item.modifiers === null || catalog_item.modifiers.length <= 0
         let html = '';
 
         function gen_html_variables(id) {
             catalog_item = get_item(id);
             let html = ``;
-            if (withoutModifiers) {
+            if (isWithoutModifier) {
                 return html;
             }
 
@@ -566,7 +566,7 @@ const Application = {
                                 </div>
                             </div>
                             <div class="col-6">
-                                <button ${withoutModifiers ? `` : `disabled="disabled"`} data-price="${catalog_item.item_cost}" id="addToCart" class="btn btn-outline-secondary" type="button">Добавить ${catalog_item.item_cost} ${defaultCurrency}</button>
+                                <button ${isWithoutModifier ? `` : `disabled="disabled"`} data-price="${catalog_item.item_cost}" id="addToCart" class="btn btn-outline-secondary" type="button">Добавить ${catalog_item.item_cost} ${defaultCurrency}</button>
                             </div>
                         </div>
                     </div>
@@ -623,7 +623,7 @@ const Application = {
                     };
                 });
             }
-            if(!withoutModifiers && attr === {}) {
+            if(!isWithoutModifier && attr === {}) {
                 return;
             }
 
